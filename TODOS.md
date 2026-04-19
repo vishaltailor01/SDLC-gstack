@@ -1,5 +1,23 @@
 # TODOS
 
+## Context skills
+
+### `/context-save --lane` + `/context-restore --lane` for parallel workstreams
+
+**What:** Let users save and restore per-workstream (lane) context independently. On save: `/context-save --lane A "backend refactor"` writes a lane-tagged file. Or `/context-save lanes` reads the "Parallelization Strategy" section of the most recent plan file and auto-generates one saved context per lane. On restore: `/context-restore --lane A` loads just that lane's context. Useful when a plan has 3 independent workstreams and the user wants to pick one up in each of 3 Conductor windows.
+
+**Why:** Plans produced by `/plan-eng-review` already emit a lane table (Lane A: touches `models/` and `controllers/` sequentially; Lane B: touches `api/` independently; etc.). Right now there's no way to transfer that structure into resumable saved state. Users manually re-describe the scope in each window. Lane-tagged save/restore would be the bridge between "here's the plan" and "three people (or three AIs) are now working in parallel on it."
+
+**Pros:** Turns `/plan-eng-review`'s parallelization output into actionable resume state. Reduces context-loss across Conductor workspace handoffs for multi-workstream plans.
+
+**Cons:** Net-new functionality (not a port from the old `/checkpoint` skill). The "spawn new Conductor windows" part needs research into whether Conductor has a spawn CLI. Also requires lane-tagging discipline in the save step (manual or extracted).
+
+**Context:** Source of the lane data model is `plan-eng-review/SKILL.md.tmpl:240-249` (the "Parallelization Strategy" output with Lane A/B/C dependency tables and conflict flags). Deferred from the v0.18.5.0 rename PR so the rename could land as a tight, low-risk fix. Saved files currently live at `~/.gstack/projects/$SLUG/checkpoints/YYYYMMDD-HHMMSS-<title>.md` with YAML frontmatter (branch, timestamp, etc.). The lane feature would add a `lane:` field to frontmatter and a `--lane` filter to both skills.
+
+**Effort:** M (human: ~1-2 days / CC: ~45-60 min)
+**Priority:** P3 (nice-to-have, not blocking anyone yet)
+**Depends on:** `/context-save` + `/context-restore` rename stable in production (v1.0.1.0+). Research: does Conductor expose a spawn-workspace CLI?
+
 ## P0: PACING_UPDATES_V0 — Louise's fatigue root cause (V1.1)
 
 **What:** Implement the pacing overhaul extracted from PLAN_TUNING_V1. Full design in `docs/designs/PACING_UPDATES_V0.md`. Requires: session-state model, `phase` field in question-log schema, registry extension for dynamic findings, pacing as skill-template control flow (not preamble prose), `bin/gstack-flip-decision` command, migration-prompt budget rule, first-run preamble audit, ranking threshold calibration from real V0 data, one-way-door uncapped rule, concrete verification values.
@@ -436,6 +454,30 @@ Linux cookie import shipped in v0.11.11.0 (Wave 3). Supports Chrome, Chromium, B
 **Completed (Linux):** v0.11.11.0 (2026-03-23)
 
 ## Ship
+
+### /ship Step 12 test harness should exec the actual template bash, not a reimplementation
+
+**What:** `test/ship-version-sync.test.ts` currently reimplements the bash from `ship/SKILL.md.tmpl` Step 12 inside template literals. When the template changes, both sides must be updated — exactly the drift-risk pattern the Step 12 fix is meant to prevent, applied to our own testing strategy. Replace with a helper that extracts the fenced bash blocks from the template at test time and runs them verbatim (similar to the `skill-parser.ts` pattern).
+
+**Why:** Surfaced by the Claude adversarial subagent during the v1.0.1.0 ship. Today the tests would stay green while the template regresses, because the error-message strings already differ between test and template. It's a silent-drift bug waiting to happen.
+
+**Context:** The fixed test file is at `test/ship-version-sync.test.ts` (branched off garrytan/ship-version-sync). Existing precedent for extracting-from-skill-md is at `test/helpers/skill-parser.ts`. Pattern: read the template, slice from `## Step 12` to the next `---`, grep fenced bash, feed to `/bin/bash` with substituted fixtures.
+
+**Effort:** S (human: ~2h / CC: ~30min)
+**Priority:** P2
+**Depends on:** None.
+
+### /ship Step 12 BASE_VERSION silent fallback to 0.0.0.0 when git show fails
+
+**What:** `BASE_VERSION=$(git show origin/<base>:VERSION 2>/dev/null || echo "0.0.0.0")` silently defaults to `0.0.0.0` in any failure mode — detached HEAD, no origin, offline, base branch renamed. In such states, a real drift could be misclassified or silently repaired with the wrong value. Distinguish "origin/<base> unreachable" from "origin/<base>:VERSION absent" and fail loudly on the former.
+
+**Why:** Flagged as CRITICAL (confidence 8/10) by the Claude adversarial subagent during the v1.0.1.0 ship. Low practical risk because `/ship` Step 3 already fetches origin before Step 12 runs — any reachability failure would abort Step 3 long before this code runs. Still, defense in depth: if someone invokes Step 12 bash outside the full /ship pipeline (e.g., via a standalone helper), the fallback masks a real problem.
+
+**Context:** Fix: wrap with `git rev-parse --verify origin/<base>` probe; if that fails, error out rather than defaulting. Touches `ship/SKILL.md.tmpl` Step 12 idempotency block (around line 409). Tests need a case where `git show` fails.
+
+**Effort:** S (human: ~1h / CC: ~15min)
+**Priority:** P3
+**Depends on:** None.
 
 ### GitLab support for /land-and-deploy
 
