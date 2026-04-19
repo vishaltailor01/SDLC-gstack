@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MVP Multi-Agent Demo</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Roboto, Arial; padding: 24px; }
+    input, button { font-size: 14px; }
+    #status { margin-top: 16px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>MVP Multi-Agent Demo</h1>
+  <p>Submit a short idea and watch agents run.</p>
+  <form id="ideaForm">
+    <input id="idea" placeholder="One-line idea" size="50" />
+    <button type="submit">Submit</button>
+  </form>
+
+  <div id="result" style="margin-top:16px; display:none">
+    <div><strong>Job ID:</strong> <span id="jobId"></span></div>
+    <div id="status">Waiting for updates...</div>
+  </div>
+
+  <script>
+    const form = document.getElementById('ideaForm');
+    const ideaInput = document.getElementById('idea');
+    const resultDiv = document.getElementById('result');
+    const jobIdEl = document.getElementById('jobId');
+    const statusEl = document.getElementById('status');
+    let pollTimer = null;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const idea = ideaInput.value.trim();
+      if (!idea) return;
+      statusEl.textContent = 'Submitting...';
+      const res = await fetch('/ideas', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ idea })
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        statusEl.textContent = 'Error: ' + (body.error || JSON.stringify(body));
+        return;
+      }
+      const id = body.id;
+      jobIdEl.textContent = id;
+      resultDiv.style.display = 'block';
+      startPoll(id);
+    });
+
+    async function fetchStatus(id) {
+      try {
+        const r = await fetch('/status/' + encodeURIComponent(id));
+        if (!r.ok) return null;
+        return await r.json();
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function startPoll(id) {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        const s = await fetchStatus(id);
+        if (!s) {
+          statusEl.textContent = 'Waiting for worker...';
+          return;
+        }
+        statusEl.textContent = JSON.stringify(s, null, 2);
+        if (s.state === 'done') {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }, 1000);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "name": "gstack-vscode-tasks",
+  "displayName": "GStack Tasks",
+  "description": "Run common gstack tasks from the VS Code Command Palette.",
+  "version": "0.0.1",
+  "publisher": "gstack",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:gstack.runTask.installDeps",
+    "onCommand:gstack.runTask.build",
+    "onCommand:gstack.runTask.test",
+    "onCommand:gstack.runTask.runBrowse",
+    "onCommand:gstack.runTask.benchmarkDryRun"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "gstack.runTask.installDeps", "title": "GStack: Install deps" },
+      { "command": "gstack.runTask.build", "title": "GStack: Build" },
+      { "command": "gstack.runTask.test", "title": "GStack: Test" },
+      { "command": "gstack.runTask.runBrowse", "title": "GStack: Run browse server" },
+      { "command": "gstack.runTask.benchmarkDryRun", "title": "GStack: Model benchmark (dry-run)" }
+    ]
+  }
+}
